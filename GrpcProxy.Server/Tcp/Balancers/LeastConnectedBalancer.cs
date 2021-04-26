@@ -17,7 +17,7 @@ namespace GrpcProxy.Server.Tcp
         {
             lock (_lock)
             {
-                TcpEndpoint leastConnectionsEndpoint = Endpoints.FirstOrDefault();
+                TcpEndpoint leastConnectionsEndpoint = Endpoints.FirstOrDefault(e => e.IsAlive);
 
                 for (int i = 0; i < Endpoints.Count; i++)
                 {
@@ -29,6 +29,10 @@ namespace GrpcProxy.Server.Tcp
                     }
                 }
 
+                if (leastConnectionsEndpoint != null && leastConnectionsEndpoint.IsAlive)
+                {
+                    leastConnectionsEndpoint.Enter();
+                }
                 return leastConnectionsEndpoint;
             }
         }

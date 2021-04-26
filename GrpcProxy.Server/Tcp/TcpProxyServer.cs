@@ -13,12 +13,14 @@ namespace GrpcProxy.Server.Tcp
 
         private readonly ITcpBalancer _balancer;
 
+        const int BUFFER_SIZE = 4096;
+
         public TcpProxyServer(ITcpBalancer balancer)
         {
             _balancer = balancer;
         }
 
-        public async Task Start(int port, CancellationToken ct)
+        public void Start(int port, CancellationToken ct)
         {
             listener = new TcpListener(IPAddress.Any, port);
             listener.Start();
@@ -26,11 +28,17 @@ namespace GrpcProxy.Server.Tcp
             _ = Task.Run(() => {
                 while (!ct.IsCancellationRequested)
                 {
-                    var client = listener.AcceptTcpClient();
-                    client.NoDelay = true;
+                    try
+                    {
+                        var client = listener.AcceptTcpClient();
+                        client.NoDelay = true;
 
-                    Trace.WriteLine("Connection accepted: " + client.Client.RemoteEndPoint.ToString());
-                    _ = Task.Run(() => ReceiveAsync(client, ct));
+                        Trace.WriteLine("Connection accepted: " + client.Client.RemoteEndPoint.ToString());
+                        _ = Task.Run(() => ReceiveAsync(client, ct));
+                    } catch (Exception ex)
+                    {
+                        Trace.WriteLine(ex.Message);
+                    }
                 }
             });
         }
@@ -44,37 +52,56 @@ namespace GrpcProxy.Server.Tcp
 
             Trace.WriteLine("Selected endpoint: " + endpoint.Config.Address + ":" + endpoint.Config.Port);
             TcpClient server = new TcpClient();
-            server.NoDelay = true;
 
             try
             {
-                ct.ThrowIfCancellationRequested();
-
-                endpoint.Enter();
                 await server.ConnectAsync(endpoint.Config.Address, endpoint.Config.Port);
-                Trace.WriteLine($"Active connections on {endpoint.Config.Address}:{endpoint.Config.Port} - {endpoint.ActiveConnections}");
+            } catch (Exception ex)
+            {
+                Trace.WriteLine("Connection error:" + ex.Message);
+                endpoint.Error();
+                _ = Task.Run(() => ReceiveAsync(client, ct));
+                return;
+            }
 
-                using var clientStream = client.GetStream();
-                using var serverStream = server.GetStream();
+            Trace.WriteLine($"Active connections on {endpoint.Config.Address}:{endpoint.Config.Port} - {endpoint.ActiveConnections}");
 
+            var clientStream = client.GetStream();
+            var serverStream = server.GetStream();
+            try 
+            {
                 await Task.WhenAny(
-                    clientStream.CopyToAsync(serverStream, ct),
+                    clientStream.CopyToAsync(serverStream, ct), // CopyClientStream(clientStream, serverStream, ct, notSentBytes),
                     serverStream.CopyToAsync(clientStream, ct));
             }
             catch (Exception ex)
             {
-                if (!server.Connected && client.Connected) // if server was disconnected
-                {
-                    Trace.WriteLine($"{endpoint.Config.Address}:{endpoint.Config.Port} server was disconnected");
-                    endpoint.Error();
-                }
-                Trace.WriteLine(ex.Message);
+                endpoint.Error();
+                Trace.WriteLine("Receive error:" + ex.Message);
             }
             finally
             {
+                Trace.WriteLine($"Closing connection to: {endpoint.Config.Address}:{endpoint.Config.Port}");
                 endpoint.Release();
                 client.Close();
                 server.Close();
+            }
+        }
+
+        private async Task CopyClientStream(NetworkStream clientStream, NetworkStream serverStream, CancellationToken ct, Memory<byte>? notSentBytes)
+        {
+            var buffer = new byte[BUFFER_SIZE];
+            int bytesRead;
+
+            while ((bytesRead = await clientStream.ReadAsync(buffer, 0, BUFFER_SIZE, ct)) != 0 && !ct.IsCancellationRequested)
+            {
+                try
+                {
+                    await serverStream.WriteAsync(buffer, 0, bytesRead, ct).ConfigureAwait(false);
+                } catch (Exception ex)
+                {
+                    throw new NetworkStreamCopyException(null, ex, new Memory<byte>(buffer, 0, bytesRead));
+                }
             }
         }
 
@@ -87,6 +114,7 @@ namespace GrpcProxy.Server.Tcp
             {
                 listener?.Stop();
                 listener = null;
+                _disposed = true;
             }
         }
 
@@ -95,5 +123,20 @@ namespace GrpcProxy.Server.Tcp
             Dispose();
         }
         #endregion
+    }
+
+    class NetworkStreamCopyException : Exception
+    {
+        public Memory<byte>? NotSentBytes { get; }
+
+        public NetworkStreamCopyException(Memory<byte>? notSentBytes = null)
+        {
+            NotSentBytes = notSentBytes;
+        }
+
+        public NetworkStreamCopyException(string message, Exception innerException, Memory<byte>? notSentBytes = null) : base(message, innerException)
+        {
+            NotSentBytes = notSentBytes;
+        }
     }
 }
