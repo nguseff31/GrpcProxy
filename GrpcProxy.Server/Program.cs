@@ -19,26 +19,14 @@ namespace GrpcProxy.Server
             var configuration = ConfigurationHelpers.BuildConfiguration();
             var appConfig = new ProxyConfig();
             configuration.GetSection("Proxy").Bind(appConfig);
-            var rnd = new Random();
-            listener = new TcpListener(IPAddress.Any, appConfig.Port);
-            listener.Start();
             Trace.Listeners.Add(new ConsoleTraceListener());
 
             var tcs = new CancellationTokenSource();
             Console.CancelKeyPress += (a, b) => tcs.Cancel();
 
-            _balancer = new LeastConnectedBalancer(appConfig.Endpoints);
+            var tcpServer = new TcpProxyServer(new LeastConnectedBalancer(appConfig.Endpoints));
+            _ = tcpServer.Start(appConfig.Port, tcs.Token);
 
-            _ = Task.Run(() => {
-                while (!tcs.Token.IsCancellationRequested)
-                {
-                    var client = listener.AcceptTcpClient();
-                    client.NoDelay = true;
-
-                    Trace.WriteLine("Connection accepted: " + client.Client.RemoteEndPoint.ToString());
-                    _ = Task.Run(async () => await ReceiveAsync(client, tcs.Token));
-                }
-            });
             Console.WriteLine("Proxy is listening on port: " + appConfig.Port);
             Console.WriteLine("Servers:");
             foreach (var ep in appConfig.Endpoints)

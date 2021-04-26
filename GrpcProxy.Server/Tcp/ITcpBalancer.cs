@@ -1,5 +1,4 @@
 ﻿using GrpcProxy.Server.Configuration;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -27,7 +26,7 @@ namespace GrpcProxy.Server.Tcp
             {
                 Interlocked.Increment(ref RoundRobinIndex);
                 var ep = Endpoints[RoundRobinIndex % Endpoints.Count];
-                if (ep.IsAlive()) return ep;
+                if (ep.IsAlive) return ep;
             }
             return null;
         }
@@ -39,8 +38,7 @@ namespace GrpcProxy.Server.Tcp
 
         public int ActiveConnections;
 
-        private DateTime? LastError;
-        private TimeSpan ErrorTimeout = TimeSpan.FromSeconds(30);
+        public bool IsAlive { get; private set; } = true;
 
         private object _errorLock = new object();
 
@@ -59,19 +57,15 @@ namespace GrpcProxy.Server.Tcp
             Interlocked.Increment(ref ActiveConnections);
         }
 
+        /// <summary>
+        /// temporary removes
+        /// </summary>
         public void Error()
         {
             lock(_errorLock)
             {
-                LastError = DateTime.UtcNow;
+                IsAlive = false;
             }
-        }
-
-        public bool IsAlive()
-        {
-            if (!LastError.HasValue) return true;
-
-            return DateTime.UtcNow > LastError + ErrorTimeout;
         }
     }
 }

@@ -21,7 +21,7 @@ namespace GrpcProxy.Server.Tcp
 
                 for (int i = 0; i < Endpoints.Count; i++)
                 {
-                    if (!Endpoints[i].IsAlive()) continue;
+                    if (!Endpoints[i].IsAlive) continue;
 
                     if (leastConnectionsEndpoint.ActiveConnections > Endpoints[i].ActiveConnections)
                     {
