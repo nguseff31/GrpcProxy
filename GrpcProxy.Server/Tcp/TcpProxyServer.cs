@@ -71,7 +71,7 @@ namespace GrpcProxy.Server.Tcp
             try 
             {
                 await Task.WhenAny(
-                    clientStream.CopyToAsync(serverStream, ct), // CopyClientStream(clientStream, serverStream, ct, notSentBytes),
+                    clientStream.CopyToAsync(serverStream, ct),
                     serverStream.CopyToAsync(clientStream, ct));
             }
             catch (Exception ex)
@@ -85,23 +85,6 @@ namespace GrpcProxy.Server.Tcp
                 endpoint.Release();
                 client.Close();
                 server.Close();
-            }
-        }
-
-        private async Task CopyClientStream(NetworkStream clientStream, NetworkStream serverStream, CancellationToken ct, Memory<byte>? notSentBytes)
-        {
-            var buffer = new byte[BUFFER_SIZE];
-            int bytesRead;
-
-            while ((bytesRead = await clientStream.ReadAsync(buffer, 0, BUFFER_SIZE, ct)) != 0 && !ct.IsCancellationRequested)
-            {
-                try
-                {
-                    await serverStream.WriteAsync(buffer, 0, bytesRead, ct).ConfigureAwait(false);
-                } catch (Exception ex)
-                {
-                    throw new NetworkStreamCopyException(null, ex, new Memory<byte>(buffer, 0, bytesRead));
-                }
             }
         }
 
@@ -123,20 +106,5 @@ namespace GrpcProxy.Server.Tcp
             Dispose();
         }
         #endregion
-    }
-
-    class NetworkStreamCopyException : Exception
-    {
-        public Memory<byte>? NotSentBytes { get; }
-
-        public NetworkStreamCopyException(Memory<byte>? notSentBytes = null)
-        {
-            NotSentBytes = notSentBytes;
-        }
-
-        public NetworkStreamCopyException(string message, Exception innerException, Memory<byte>? notSentBytes = null) : base(message, innerException)
-        {
-            NotSentBytes = notSentBytes;
-        }
     }
 }
