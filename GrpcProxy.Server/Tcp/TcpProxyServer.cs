@@ -1,4 +1,5 @@
-﻿using System;
+﻿using NLog;
+using System;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
@@ -12,8 +13,7 @@ namespace GrpcProxy.Server.Tcp
         private TcpListener listener;
 
         private readonly ITcpBalancer _balancer;
-
-        const int BUFFER_SIZE = 4096;
+        private ILogger _logger = LogManager.GetCurrentClassLogger();
 
         public TcpProxyServer(ITcpBalancer balancer)
         {
@@ -33,11 +33,11 @@ namespace GrpcProxy.Server.Tcp
                         var client = listener.AcceptTcpClient();
                         client.NoDelay = true;
 
-                        Trace.WriteLine("Connection accepted: " + client.Client.RemoteEndPoint.ToString());
+                        _logger.Debug($"Connection accepted: {client.Client.RemoteEndPoint}");
                         _ = Task.Run(() => ReceiveAsync(client, ct));
                     } catch (Exception ex)
                     {
-                        Trace.WriteLine(ex.Message);
+                        _logger.Error(ex);
                     }
                 }
             });
@@ -50,21 +50,23 @@ namespace GrpcProxy.Server.Tcp
             if (endpoint == null)
                 throw new Exception("No alive servers left");
 
-            Trace.WriteLine("Selected endpoint: " + endpoint.Config.Address + ":" + endpoint.Config.Port);
-            TcpClient server = new TcpClient();
+            var logPrefix = $"{client.Client.RemoteEndPoint}/{endpoint}";
+
+            _logger.Debug($"{logPrefix} endpoint selected");
+            using var server = new TcpClient();
 
             try
             {
                 await server.ConnectAsync(endpoint.Config.Address, endpoint.Config.Port);
             } catch (Exception ex)
             {
-                Trace.WriteLine("Connection error:" + ex.Message);
+                _logger.Error(ex, $"{logPrefix} connect error");
                 endpoint.Error();
                 _ = Task.Run(() => ReceiveAsync(client, ct));
                 return;
             }
 
-            Trace.WriteLine($"Active connections on {endpoint.Config.Address}:{endpoint.Config.Port} - {endpoint.ActiveConnections}");
+            _logger.Debug($"{endpoint} - {endpoint.ActiveConnections} active connections");
 
             var clientStream = client.GetStream();
             var serverStream = server.GetStream();
@@ -77,11 +79,11 @@ namespace GrpcProxy.Server.Tcp
             catch (Exception ex)
             {
                 endpoint.Error();
-                Trace.WriteLine("Receive error:" + ex.Message);
+                _logger.Error(ex, $"{logPrefix} stream copy error");
             }
             finally
             {
-                Trace.WriteLine($"Closing connection to: {endpoint.Config.Address}:{endpoint.Config.Port}");
+                _logger.Debug($"{logPrefix} - closing connection");
                 endpoint.Release();
                 client.Close();
                 server.Close();

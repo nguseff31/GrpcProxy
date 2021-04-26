@@ -1,5 +1,7 @@
 ﻿using GrpcProxy.Server.Tcp;
 using Microsoft.Extensions.Configuration;
+using NLog.Config;
+using NLog.Targets;
 using System;
 using System.Diagnostics;
 using System.Net;
@@ -16,7 +18,6 @@ namespace GrpcProxy.Server
             var configuration = ConfigurationHelpers.BuildConfiguration();
             var appConfig = new ProxyConfig();
             configuration.GetSection("Proxy").Bind(appConfig);
-            Trace.Listeners.Add(new ConsoleTraceListener());
 
             var tcs = new CancellationTokenSource();
             Console.CancelKeyPress += (a, b) => tcs.Cancel();

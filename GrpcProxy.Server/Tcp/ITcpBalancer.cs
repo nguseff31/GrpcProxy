@@ -9,8 +9,4 @@ namespace GrpcProxy.Server.Tcp
     {
         TcpEndpoint GetEndpoint();
     }
-
-    
-
-    
 }

@@ -38,5 +38,10 @@ namespace GrpcProxy.Server.Tcp
                 IsAlive = false;
             }
         }
+
+        public override string ToString()
+        {
+            return $"{Config.Address}:{Config.Port}";
+        }
     }
 }
