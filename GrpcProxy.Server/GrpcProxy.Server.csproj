@@ -11,10 +11,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Include="README" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Content Include="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
