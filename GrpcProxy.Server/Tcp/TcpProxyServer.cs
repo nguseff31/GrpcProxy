@@ -1,6 +1,5 @@
 ﻿using NLog;
 using System;
-using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading;
@@ -78,7 +77,6 @@ namespace GrpcProxy.Server.Tcp
             }
             catch (Exception ex)
             {
-                endpoint.Error();
                 _logger.Error(ex, $"{logPrefix} stream copy error");
             }
             finally

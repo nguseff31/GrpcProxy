@@ -36,6 +36,7 @@ namespace GrpcProxy.Server.Tcp
             lock (_errorLock)
             {
                 IsAlive = false;
+                Release();
             }
         }
 
