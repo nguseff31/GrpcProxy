@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace GrpcProxy.Server.Tcp.Balancers
 {
-    class RoundRobinBalancer : ITcpBalancer
+    class RoundRobinBalancer : TcpBalancer
     {
         private List<TcpEndpoint> Endpoints;
         private int RoundRobinIndex;
@@ -15,17 +15,13 @@ namespace GrpcProxy.Server.Tcp.Balancers
             Endpoints = endpointConfigs.Select(c => new TcpEndpoint(c)).ToList();
         }
 
-        public TcpEndpoint GetEndpoint()
+        public override TcpEndpoint.Connection? GetEndpoint()
         {
-            for (int i = 0; i < Endpoints.Count; i++)
+            Interlocked.Increment(ref RoundRobinIndex);
+            var ep = Endpoints[RoundRobinIndex % Endpoints.Count];
+            if (ep.IsAlive)
             {
-                Interlocked.Increment(ref RoundRobinIndex);
-                var ep = Endpoints[RoundRobinIndex % Endpoints.Count];
-                if (ep.IsAlive)
-                {
-                    ep.Enter();
-                    return ep;
-                }
+                return new TcpEndpoint.Connection(ep);
             }
             return null;
         }

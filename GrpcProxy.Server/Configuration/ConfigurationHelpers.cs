@@ -11,7 +11,7 @@ namespace GrpcProxy.Server
         {
             var cb = new ConfigurationBuilder();
             cb.AddJsonFile("appsettings.json");
-            cb.AddJsonFile("appsettings.local.json", optional: true);
+            cb.AddJsonFile("appsettings.local.json", optional: true); 
             cb.AddEnvironmentVariables();
             return cb.Build();
         }

@@ -1,10 +1,11 @@
 ﻿using GrpcProxy.Server.Configuration;
+using static MoreLinq.Extensions.MinByExtension;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace GrpcProxy.Server.Tcp
 {
-    class LeastConnectedBalancer : ITcpBalancer
+    class LeastConnectedBalancer : TcpBalancer
     {
         private List<TcpEndpoint> Endpoints;
         private object _lock = new object();
@@ -13,27 +14,19 @@ namespace GrpcProxy.Server.Tcp
         {
             Endpoints = endpointConfigs.Select(c => new TcpEndpoint(c)).ToList();
         }
-        public TcpEndpoint GetEndpoint()
+
+        public override TcpEndpoint.Connection? GetEndpoint()
         {
             lock (_lock)
             {
-                TcpEndpoint leastConnectionsEndpoint = Endpoints.FirstOrDefault(e => e.IsAlive);
-
-                for (int i = 0; i < Endpoints.Count; i++)
-                {
-                    if (!Endpoints[i].IsAlive) continue;
-
-                    if (leastConnectionsEndpoint.ActiveConnections > Endpoints[i].ActiveConnections)
-                    {
-                        leastConnectionsEndpoint = Endpoints[i];
-                    }
-                }
-
-                if (leastConnectionsEndpoint != null && leastConnectionsEndpoint.IsAlive)
-                {
-                    leastConnectionsEndpoint.Enter();
-                }
-                return leastConnectionsEndpoint;
+                var endpoint = Endpoints
+                    .Where(e => e.IsAlive)
+                    .MinBy(e => e.ActiveConnections)
+                    .FirstOrDefault();
+                
+                if (endpoint != null)
+                    return new TcpEndpoint.Connection(endpoint);
+                return null;
             }
         }
     }

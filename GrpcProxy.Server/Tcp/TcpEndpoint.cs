@@ -1,4 +1,5 @@
 ﻿using GrpcProxy.Server.Configuration;
+using System;
 using System.Threading;
 
 namespace GrpcProxy.Server.Tcp
@@ -7,9 +8,10 @@ namespace GrpcProxy.Server.Tcp
     {
         public EndpointConfig Config { get; }
 
-        public int ActiveConnections;
-
+        public int ActiveConnections => _activeConnections;
         public bool IsAlive { get; private set; } = true;
+
+        private int _activeConnections;
 
         private object _errorLock = new object();
 
@@ -18,31 +20,52 @@ namespace GrpcProxy.Server.Tcp
             Config = config;
         }
 
-        public void Release()
+        public Connection Connect()
         {
-            Interlocked.Decrement(ref ActiveConnections);
+            return new Connection(this);
         }
 
-        public void Enter()
+        private void Release()
         {
-            Interlocked.Increment(ref ActiveConnections);
+            Interlocked.Decrement(ref _activeConnections);
         }
 
-        /// <summary>
-        /// temporary removes
-        /// </summary>
+        private void Enter()
+        {
+            Interlocked.Increment(ref _activeConnections);
+        }
+
         public void Error()
         {
             lock (_errorLock)
             {
                 IsAlive = false;
-                Release();
             }
         }
 
         public override string ToString()
         {
             return $"{Config.Address}:{Config.Port}";
+        }
+
+
+        public struct Connection : IDisposable
+        {
+            public readonly TcpEndpoint Endpoint;
+
+            public Connection(TcpEndpoint endpoint)
+            {
+                if (endpoint == null)
+                    throw new ArgumentException();
+
+                Endpoint = endpoint;
+                Endpoint.Enter();
+            }
+
+            public void Dispose()
+            {
+                Endpoint.Release();
+            }
         }
     }
 }
